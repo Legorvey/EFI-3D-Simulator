@@ -1,6 +1,6 @@
 streamlit
 numpy
-pyvista[all]
+pyvista
 scipy
 trame
 trame-vtk
