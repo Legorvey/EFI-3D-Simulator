@@ -1,4 +1,7 @@
 streamlit
 numpy
-pyvista
+pyvista[all]
 scipy
+trame
+trame-vtk
+trame-vuetify
