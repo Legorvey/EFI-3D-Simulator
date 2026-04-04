@@ -1,7 +1,4 @@
 streamlit
 numpy
-pyvista
 scipy
-trame
-trame-vtk
-trame-vuetify
+plotly

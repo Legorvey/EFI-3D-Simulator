@@ -1,33 +1,30 @@
 import streamlit as st
 import numpy as np
-import pyvista as pv
-import streamlit.components.v1 as components
-import tempfile
-import os
+import plotly.graph_objects as go
 from scipy.constants import epsilon_0
 
-# Setup Headless Rendering untuk Cloud
-if not os.environ.get("DISPLAY"):
-    try:
-        pv.start_xvfb()
-    except:
-        pass
-
-pv.OFF_SCREEN = True
 st.set_page_config(layout="wide", page_title="Aditya EM-Simulator")
 
 class EMSimulator:
-    def __init__(self, grid_size=30):
-        _range = np.linspace(-5, 5, grid_size)
+    def __init__(self, grid_size=25): # Grid lebih kecil biar web responsif
+        self.res = grid_size
+        _range = np.linspace(-5, 5, self.res)
         self.X, self.Y, self.Z = np.meshgrid(_range, _range, _range, indexing='ij')
         self.V = np.zeros_like(self.X)
+        self.charges = []
 
     def add_point_charge(self, q, pos):
         r = np.sqrt((self.X - pos[0])**2 + (self.Y - pos[1])**2 + (self.Z - pos[2])**2)
         r[r < 0.2] = 0.2 
         self.V += q / (4 * np.pi * epsilon_0 * r)
+        self.charges.append({'q': q, 'pos': pos})
 
-# --- UI ---
+    def calculate_field(self):
+        # Hitung Gradien V untuk dapet E
+        Ex, Ey, Ez = np.gradient(-self.V)
+        return Ex, Ey, Ez
+
+# --- UI SIDEBAR ---
 st.sidebar.header("📝 Editor Muatan")
 if 'charge_list' not in st.session_state:
     st.session_state.charge_list = []
@@ -41,32 +38,60 @@ with st.sidebar:
     if st.button("🗑️ Reset"):
         st.session_state.charge_list = []; st.rerun()
 
-# --- RENDER ---
-st.title("⚡ 3D Electric Field Simulator")
+# --- RENDERING DENGAN PLOTLY ---
+st.title("⚡ 3D Electric Field Simulator (Stable Version)")
+st.caption("Aditya - Universitas Padjadjaran")
+
 if st.session_state.charge_list:
     sim = EMSimulator()
     for c in st.session_state.charge_list:
         sim.add_point_charge(c['q'], c['p'])
-
-    grid = pv.StructuredGrid(sim.X, sim.Y, sim.Z)
-    grid["V"] = sim.V.flatten()
     
-    # Hitung Medan Listrik
-    grad = np.gradient(-sim.V, 10/29) # spacing approx
-    grid["E"] = np.c_[grad[0].flatten(), grad[1].flatten(), grad[2].flatten()]
-
-    plotter = pv.Plotter(window_size=[800, 600])
-    plotter.set_background("#121212")
-    plotter.add_mesh(grid.contour(scalars="V"), opacity=0.3, cmap="plasma")
+    Ex, Ey, Ez = sim.calculate_field()
     
-    # Garis Medan
-    streamlines = grid.streamlines(vectors="E", n_points=80, source_radius=4)
-    plotter.add_mesh(streamlines.tube(radius=0.015), color="white")
+    fig = go.Figure()
 
-    # Export ke HTML
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
-        plotter.export_html(tmp.name) # Tanpa argumen backend biar nggak error
-        with open(tmp.name, "r", encoding="utf-8") as f:
-            components.html(f.read(), height=600)
+    # 1. Plot Muatan (Bola Merah/Biru)
+    for c in st.session_state.charge_list:
+        fig.add_trace(go.Scatter3d(
+            x=[c['p'][0]], y=[c['p'][1]], z=[c['p'][2]],
+            mode='markers',
+            marker=dict(size=10, color='red' if c['q'] > 0 else 'blue'),
+            name="Positive" if c['q'] > 0 else "Negative"
+        ))
+
+    # 2. Plot Permukaan Ekipotensial (Isosurface)
+    fig.add_trace(go.Isosurface(
+        x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
+        value=sim.V.flatten(),
+        isomin=np.percentile(sim.V, 10),
+        isomax=np.percentile(sim.V, 90),
+        surface_count=3,
+        opacity=0.3,
+        colorscale='Plasma',
+        showscale=False
+    ))
+
+    # 3. Plot Garis Medan (Streamlines)
+    fig.add_trace(go.Streamtube(
+        x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
+        u=Ex.flatten(), v=Ey.flatten(), w=Ez.flatten(),
+        starts=dict(
+            x=np.random.uniform(-4, 4, 30),
+            y=np.random.uniform(-4, 4, 30),
+            z=np.random.uniform(-4, 4, 30)
+        ),
+        sizeref=0.5,
+        colorscale='Greys',
+        showscale=False
+    ))
+
+    fig.update_layout(
+        scene=dict(bgcolor='black', xaxis_visible=False, yaxis_visible=False, zaxis_visible=False),
+        margin=dict(l=0, r=0, b=0, t=0),
+        template="plotly_dark"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("👈 Tambahkan muatan di menu kiri.")
