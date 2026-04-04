@@ -3,8 +3,17 @@ import numpy as np
 import pyvista as pv
 import streamlit.components.v1 as components
 import tempfile
+import os
 from scipy.constants import epsilon_0
 
+# --- KONFIGURASI HEADLESS UNTUK CLOUD ---
+if not os.environ.get("DISPLAY"):
+    try:
+        pv.start_xvfb()
+    except Exception:
+        pass
+
+pv.OFF_SCREEN = True  # Wajib True buat di server
 st.set_page_config(layout="wide", page_title="Aditya EM-Simulator")
 
 class EMSimulator:
@@ -25,8 +34,8 @@ class EMSimulator:
         grad = np.gradient(-self.V, spacing)
         return grad[0], grad[1], grad[2]
 
-# --- UI INTERFACE ---
-st.sidebar.header("📝 Editor Muatan (Desmos Style)")
+# --- UI SIDEBAR ---
+st.sidebar.header("📝 Editor Muatan")
 if 'charge_list' not in st.session_state:
     st.session_state.charge_list = []
 
@@ -34,9 +43,7 @@ with st.sidebar:
     type_m = st.selectbox("Tipe", ["Titik", "Garis"])
     val_q = st.number_input("Besar Muatan (nC)", value=1.0)
     c1, c2, c3 = st.columns(3)
-    x1 = c1.number_input("X", value=0.0)
-    y1 = c2.number_input("Y", value=0.0)
-    z1 = c3.number_input("Z", value=0.0)
+    x1, y1, z1 = c1.number_input("X", 0.0), c2.number_input("Y", 0.0), c3.number_input("Z", 0.0)
     
     if type_m == "Garis":
         c4, c5, c6 = st.columns(3)
@@ -53,6 +60,8 @@ with st.sidebar:
 
 # --- RENDERING ---
 st.title("⚡ 3D Electric Field Simulator")
+st.caption("Developed by Aditya - Unpad")
+
 if st.session_state.charge_list:
     sim = EMSimulator()
     for c in st.session_state.charge_list:
@@ -67,15 +76,16 @@ if st.session_state.charge_list:
     Ex, Ey, Ez = sim.calculate_field()
     grid["E"] = np.c_[Ex.flatten(), Ey.flatten(), Ez.flatten()]
 
+    # Setting up Plotter
     plotter = pv.Plotter(window_size=[800, 600])
     plotter.add_mesh(grid.contour(scalars="V"), opacity=0.3, cmap="plasma")
     streamlines = grid.streamlines(vectors="E", n_points=100, source_radius=4)
     plotter.add_mesh(streamlines.tube(radius=0.01), color="white")
 
-    # Export ke format HTML yang bisa dibaca Streamlit
+    # Export dengan backend static untuk menghindari RuntimeError
     with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
-        plotter.export_html(tmp.name)
+        plotter.export_html(tmp.name, backend='static') # Tambahan backend='static'
         with open(tmp.name, "r", encoding="utf-8") as f:
-            st.components.v1.html(f.read(), height=600)
+            components.html(f.read(), height=600)
 else:
     st.info("👈 Tambahkan muatan di menu kiri untuk memulai.")
