@@ -76,21 +76,32 @@ if st.session_state.charge_list:
         name="Equipotential"
     ))
 
-    # 3. Plot Garis Medan (Selang Putih E-Field)
-    # Gunakan Streamtube, tentukan titik acak buat aliran selangnya
-    N_tubes = 40
-    start_x = np.random.uniform(-4, 4, N_tubes)
-    start_y = np.random.uniform(-4, 4, N_tubes)
-    start_z = np.random.uniform(-4, 4, N_tubes)
+    # 3. Plot Garis Medan (High-Density Streamlines)
+    # Kita buat titik awal selang mengelilingi setiap muatan agar aliran terlihat jelas
+    all_starts_x = []
+    all_starts_y = []
+    all_starts_z = []
+    
+    for c in st.session_state.charge_list:
+        # Generate 20 titik di sekitar setiap muatan (bentuk bola kecil)
+        phi = np.random.uniform(0, 2*np.pi, 20)
+        costheta = np.random.uniform(-1, 1, 20)
+        theta = np.arccos(costheta)
+        r = 0.4 # Jarak mulai selang dari pusat muatan
+        
+        all_starts_x.extend(c['p'][0] + r * np.sin(theta) * np.cos(phi))
+        all_starts_y.extend(c['p'][1] + r * np.sin(theta) * np.sin(phi))
+        all_starts_z.extend(c['p'][2] + r * np.cos(theta))
 
     fig.add_trace(go.Streamtube(
         x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
         u=Ex.flatten(), v=Ey.flatten(), w=Ez.flatten(),
-        starts=dict(x=start_x, y=start_y, z=start_z),
-        sizeref=0.4, # Ketebalan selang
-        colorscale=[[0, 'white'], [1, 'white']], # Warna putih total
+        starts=dict(x=all_starts_x, y=all_starts_y, z=all_starts_z),
+        sizeref=0.3, # Ketebalan selang
+        colorscale=[[0, 'white'], [1, 'white']],
         showscale=False,
-        name="Streamlines"
+        maxdisplayed=1000,
+        name="Field Lines"
     ))
 
     # Tampilan Akhir (Mode Gelap Unpad)
