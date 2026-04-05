@@ -63,13 +63,22 @@ if st.session_state.charge_list:
     Ex_s, Ey_s, Ez_s = sim.Ex[skip], sim.Ey[skip], sim.Ez[skip]
     E_mag = np.sqrt(Ex_s**2 + Ey_s**2 + Ez_s**2) + 1e-12
 
+    # 2. Vector Field (E) - Dibuat lebih renggang & ukuran proporsional
+    step = 4 # Ditambah biar makin renggang (3 -> 4)
+    skip = (slice(None, None, step), slice(None, None, step), slice(None, None, step))
+    
+    Ex_s, Ey_s, Ez_s = sim.Ex[skip], sim.Ey[skip], sim.Ez[skip]
+    E_mag = np.sqrt(Ex_s**2 + Ey_s**2 + Ez_s**2) + 1e-12
+
     fig.add_trace(go.Cone(
         x=sim.X[skip].flatten(), y=sim.Y[skip].flatten(), z=sim.Z[skip].flatten(),
         u=(Ex_s/E_mag).flatten(), v=(Ey_s/E_mag).flatten(), w=(Ez_s/E_mag).flatten(),
-        sizemode="scaled", sizeref=0.8,
-        colorscale='Viridis', showscale=True,
-        colorbar=dict(title="Arah E", thickness=15),
-        opacity=0.8
+        sizemode="absolute", # PENTING: Ukuran panah jadi tetap, nggak membesar aneh
+        sizeref=0.3,         # Kecilin ukuran panah individu
+        colorscale='Viridis', 
+        showscale=False,
+        opacity=1.0,         # Panah dibuat solid biar tegas
+        name="Field Vectors"
     ))
 
     # 3. Muatan
