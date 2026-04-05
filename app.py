@@ -6,27 +6,20 @@ from scipy.constants import epsilon_0
 st.set_page_config(layout="wide", page_title="Aditya EM-Simulator")
 
 class EMSimulator:
-    def __init__(self, grid_size=25):
+    def __init__(self, grid_size=20): # Grid sedikit lebih renggang untuk Cone
         self.res = grid_size
         _range = np.linspace(-5, 5, self.res)
         self.X, self.Y, self.Z = np.meshgrid(_range, _range, _range, indexing='ij')
         self.V = np.zeros_like(self.X)
-        self.Ex = np.zeros_like(self.X)
-        self.Ey = np.zeros_like(self.X)
-        self.Ez = np.zeros_like(self.X)
+        self.Ex, self.Ey, self.Ez = [np.zeros_like(self.X) for _ in range(3)]
 
     def add_point_charge(self, q, pos):
-        # Hitung jarak r
         dx, dy, dz = self.X - pos[0], self.Y - pos[1], self.Z - pos[2]
         r2 = dx**2 + dy**2 + dz**2
-        r2[r2 < 0.2] = 0.2 # Singularity handling
+        r2[r2 < 0.2] = 0.2 
         r = np.sqrt(r2)
         
-        # Potensial (V)
         self.V += q / (4 * np.pi * epsilon_0 * r)
-        
-        # Medan Listrik (E) - Hukum Coulomb Analitik
-        # E = k * q * r_vec / r^3
         mag = q / (4 * np.pi * epsilon_0 * (r2**1.5))
         self.Ex += mag * dx
         self.Ey += mag * dy
@@ -47,53 +40,36 @@ with st.sidebar:
         st.session_state.charge_list = []; st.rerun()
 
 # --- RENDERING ---
-st.title("⚡ 3D Electric Field Simulator (Stable Version)")
-st.caption("Aditya - Universitas Padjadjaran")
+st.title("⚡ 3D Electric Field Simulator")
+st.caption("Aditya - Universitas Padjadjaran | Vector Field Mode")
 
 if st.session_state.charge_list:
     sim = EMSimulator()
-    all_starts_x, all_starts_y, all_starts_z = [], [], []
-    
     for c in st.session_state.charge_list:
         sim.add_point_charge(c['q'], c['p'])
-        
-        # Titik awal selang putih (Streamlines) mengelilingi muatan
-        phi = np.random.uniform(0, 2*np.pi, 30)
-        costheta = np.random.uniform(-1, 1, 30)
-        theta = np.arccos(costheta)
-        r_start = 0.5 
-        all_starts_x.extend(c['p'][0] + r_start * np.sin(theta) * np.cos(phi))
-        all_starts_y.extend(c['p'][1] + r_start * np.sin(theta) * np.sin(phi))
-        all_starts_z.extend(c['p'][2] + r_start * np.cos(theta))
-
+    
     fig = go.Figure()
 
-    # 1. Plot Muatan
+    # 1. Muatan
     for c in st.session_state.charge_list:
         fig.add_trace(go.Scatter3d(
             x=[c['p'][0]], y=[c['p'][1]], z=[c['p'][2]],
-            mode='markers',
-            marker=dict(size=10, color='#FF4B4B' if c['q'] > 0 else '#0068C9', line=dict(color='white', width=2))
+            mode='markers', marker=dict(size=10, color='#FF4B4B' if c['q'] > 0 else '#0068C9')
         ))
 
-    # 2. Plot Permukaan Ekipotensial (V)
+    # 2. Isosurface (Potensial V)
     fig.add_trace(go.Isosurface(
         x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
-        value=sim.V.flatten(),
-        surface_count=4, opacity=0.2, colorscale='Plasma', showscale=False
+        value=sim.V.flatten(), surface_count=3, opacity=0.2, colorscale='Plasma', showscale=False
     ))
 
-    # 3. Plot Garis Medan (E) - Normalisasi magnitude agar Plotly stabil
+    # 3. Vector Field (Cone - Arah Medan Listrik E)
+    # Normalisasi agar semua panah ukurannya seragam tapi arah tetap benar
     E_mag = np.sqrt(sim.Ex**2 + sim.Ey**2 + sim.Ez**2) + 1e-12
-    ux, uy, uz = sim.Ex/E_mag, sim.Ey/E_mag, sim.Ez/E_mag
-
-    fig.add_trace(go.Streamtube(
+    fig.add_trace(go.Cone(
         x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
-        u=ux.flatten(), v=uy.flatten(), w=uz.flatten(),
-        starts=dict(x=all_starts_x, y=all_starts_y, z=all_starts_z),
-        sizeref=0.3, # Ukuran selang
-        colorscale=[[0, 'white'], [1, 'white']], showscale=False,
-        maxdisplayed=1500
+        u=(sim.Ex/E_mag).flatten(), v=(sim.Ey/E_mag).flatten(), w=(sim.Ez/E_mag).flatten(),
+        sizemode="scaled", sizeref=0.5, colorscale='Greys', showscale=False, opacity=0.8
     ))
 
     fig.update_layout(
@@ -101,7 +77,6 @@ if st.session_state.charge_list:
         margin=dict(l=0, r=0, b=0, t=0), template="plotly_dark"
     )
 
-    # FIX Warning: pakai width='stretch'
     st.plotly_chart(fig, width='stretch')
 else:
     st.info("👈 Tambahkan muatan di sidebar.")
