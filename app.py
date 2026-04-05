@@ -6,7 +6,7 @@ from scipy.constants import epsilon_0
 st.set_page_config(layout="wide", page_title="Aditya EM-Simulator")
 
 class EMSimulator:
-    def __init__(self, grid_size=20): # Grid sedikit lebih renggang untuk Cone
+    def __init__(self, grid_size=30): # Grid rapat buat hitungan presisi
         self.res = grid_size
         _range = np.linspace(-5, 5, self.res)
         self.X, self.Y, self.Z = np.meshgrid(_range, _range, _range, indexing='ij')
@@ -18,7 +18,6 @@ class EMSimulator:
         r2 = dx**2 + dy**2 + dz**2
         r2[r2 < 0.2] = 0.2 
         r = np.sqrt(r2)
-        
         self.V += q / (4 * np.pi * epsilon_0 * r)
         mag = q / (4 * np.pi * epsilon_0 * (r2**1.5))
         self.Ex += mag * dx
@@ -31,7 +30,7 @@ if 'charge_list' not in st.session_state:
     st.session_state.charge_list = []
 
 with st.sidebar:
-    val_q = st.number_input("Besar Muatan (nC)", value=1.0)
+    val_q = st.number_input("Besar Muatan (nC)", value=5.0)
     c1, c2, c3 = st.columns(3)
     x, y, z = c1.number_input("X", 0.0), c2.number_input("Y", 0.0), c3.number_input("Z", 0.0)
     if st.button("➕ Tambah"):
@@ -40,8 +39,8 @@ with st.sidebar:
         st.session_state.charge_list = []; st.rerun()
 
 # --- RENDERING ---
-st.title("⚡ 3D Electric Field Simulator")
-st.caption("Aditya - Universitas Padjadjaran | Vector Field Mode")
+st.title("3D Electric Field Simulator")
+st.caption("Aditya - Unpad | Precision Analysis Mode")
 
 if st.session_state.charge_list:
     sim = EMSimulator()
@@ -50,33 +49,41 @@ if st.session_state.charge_list:
     
     fig = go.Figure()
 
-    # 1. Muatan
+    # 1. Isosurface (V) - Pakai grid rapat (High Res)
+    fig.add_trace(go.Isosurface(
+        x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
+        value=sim.V.flatten(),
+        surface_count=5, opacity=0.15, colorscale='Plasma', showscale=False
+    ))
+
+    # 2. Vector Field (E) - Pakai SLICING biar Renggang (Low Res View)
+    step = 3 # Hanya ambil setiap 3 titik (Jauh lebih bersih)
+    skip = (slice(None, None, step), slice(None, None, step), slice(None, None, step))
+    
+    Ex_s, Ey_s, Ez_s = sim.Ex[skip], sim.Ey[skip], sim.Ez[skip]
+    E_mag = np.sqrt(Ex_s**2 + Ey_s**2 + Ez_s**2) + 1e-12
+
+    fig.add_trace(go.Cone(
+        x=sim.X[skip].flatten(), y=sim.Y[skip].flatten(), z=sim.Z[skip].flatten(),
+        u=(Ex_s/E_mag).flatten(), v=(Ey_s/E_mag).flatten(), w=(Ez_s/E_mag).flatten(),
+        sizemode="scaled", sizeref=0.8,
+        colorscale='Viridis', showscale=True,
+        colorbar=dict(title="Arah E", thickness=15),
+        opacity=0.8
+    ))
+
+    # 3. Muatan
     for c in st.session_state.charge_list:
         fig.add_trace(go.Scatter3d(
             x=[c['p'][0]], y=[c['p'][1]], z=[c['p'][2]],
-            mode='markers', marker=dict(size=10, color='#FF4B4B' if c['q'] > 0 else '#0068C9')
+            mode='markers', marker=dict(size=10, color='#FF4B4B' if c['q'] > 0 else '#0068C9', line=dict(color='white', width=2))
         ))
 
-    # 2. Isosurface (Potensial V)
-    fig.add_trace(go.Isosurface(
-        x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
-        value=sim.V.flatten(), surface_count=3, opacity=0.2, colorscale='Plasma', showscale=False
-    ))
-
-    # 3. Vector Field (Cone - Arah Medan Listrik E)
-    # Normalisasi agar semua panah ukurannya seragam tapi arah tetap benar
-    E_mag = np.sqrt(sim.Ex**2 + sim.Ey**2 + sim.Ez**2) + 1e-12
-    fig.add_trace(go.Cone(
-        x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
-        u=(sim.Ex/E_mag).flatten(), v=(sim.Ey/E_mag).flatten(), w=(sim.Ez/E_mag).flatten(),
-        sizemode="scaled", sizeref=0.5, colorscale='Greys', showscale=False, opacity=0.8
-    ))
-
     fig.update_layout(
-        scene=dict(bgcolor='black', xaxis_visible=False, yaxis_visible=False, zaxis_visible=False),
+        scene=dict(bgcolor='#0A0A0A', xaxis_visible=False, yaxis_visible=False, zaxis_visible=False),
         margin=dict(l=0, r=0, b=0, t=0), template="plotly_dark"
     )
 
     st.plotly_chart(fig, width='stretch')
 else:
-    st.info("👈 Tambahkan muatan di sidebar.")
+    st.info("Tambahkan muatan di sidebar.")
