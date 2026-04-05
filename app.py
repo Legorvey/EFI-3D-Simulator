@@ -76,44 +76,45 @@ if st.session_state.charge_list:
         name="Equipotential"
     ))
 
-    # 3. Plot Garis Medan (High-Density Streamlines)
-    # Kita buat titik awal selang mengelilingi setiap muatan agar aliran terlihat jelas
-    all_starts_x = []
-    all_starts_y = []
-    all_starts_z = []
+    # 3. Plot Garis Medan (Optimized for Plotly)
+    all_starts_x, all_starts_y, all_starts_z = [], [], []
     
     for c in st.session_state.charge_list:
-        # Generate 20 titik di sekitar setiap muatan (bentuk bola kecil)
-        phi = np.random.uniform(0, 2*np.pi, 20)
-        costheta = np.random.uniform(-1, 1, 20)
+        # Tambah titik awal lebih banyak (40 per muatan)
+        phi = np.random.uniform(0, 2*np.pi, 40)
+        costheta = np.random.uniform(-1, 1, 40)
         theta = np.arccos(costheta)
-        r = 0.4 # Jarak mulai selang dari pusat muatan
-        
+        r = 0.5 
         all_starts_x.extend(c['p'][0] + r * np.sin(theta) * np.cos(phi))
         all_starts_y.extend(c['p'][1] + r * np.sin(theta) * np.sin(phi))
         all_starts_z.extend(c['p'][2] + r * np.cos(theta))
 
+    # NORMALISASI: Ini kunci biar Plotly mau ngerender
+    E_mag = np.sqrt(Ex**2 + Ey**2 + Ez**2)
+    # Kita buat magnitudo vektor jadi seragam (1.0) tapi arah tetap sama
+    ux, uy, uz = Ex/(E_mag + 1e-9), Ey/(E_mag + 1e-9), Ez/(E_mag + 1e-9)
+
     fig.add_trace(go.Streamtube(
         x=sim.X.flatten(), y=sim.Y.flatten(), z=sim.Z.flatten(),
-        u=Ex.flatten(), v=Ey.flatten(), w=Ez.flatten(),
+        u=ux.flatten(), v=uy.flatten(), w=uz.flatten(), # Gunakan vektor ternormalisasi
         starts=dict(x=all_starts_x, y=all_starts_y, z=all_starts_z),
-        sizeref=0.3, # Ketebalan selang
+        sizeref=0.15, # Kecilin biar gak numpuk
         colorscale=[[0, 'white'], [1, 'white']],
         showscale=False,
-        maxdisplayed=1000,
-        name="Field Lines"
+        maxdisplayed=2000
     ))
 
-    # Tampilan Akhir (Mode Gelap Unpad)
+    # Tampilan Scene
     fig.update_layout(
         scene=dict(
-            bgcolor='#111111', # Hitung gelap total
-            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
-            camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))
+            bgcolor='black',
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            zaxis=dict(visible=False),
+            aspectmode='cube' # Biar gak penyet
         ),
         margin=dict(l=0, r=0, b=0, t=0),
-        template="plotly_dark",
-        showlegend=False
+        template="plotly_dark"
     )
 
     st.plotly_chart(fig, use_container_width=True)
